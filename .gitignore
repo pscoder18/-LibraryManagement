@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+static/uploads/*
+!static/uploads/.gitkeep
+!static/uploads/1984.jpg
+!static/uploads/harry_potter.jpg
+
+# Database
+mysql/*.sqlite
+mysql/*.db
+
+# Logs
+*.log

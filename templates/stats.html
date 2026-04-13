@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Statistics - Library Management</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark px-3">
+        <a class="navbar-brand" href="{{ url_for('dashboard') }}">Library Admin</a>
+        <div class="ms-auto">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm">Dashboard</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+        <h2 class="mb-4">Advanced Database Insights</h2>
+        
+        <div class="row">
+            <!-- 1. SET OPERATIONS (UNION) -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-primary text-white">Combined User Directory (UNION)</div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead><tr><th>Name</th><th>Contact</th><th>Role</th></tr></thead>
+                            <tbody>
+                                {% for user in user_directory %}
+                                <tr><td>{{ user.name }}</td><td>{{ user.contact }}</td><td><span class="badge {{ 'bg-info' if user.role=='Admin' else 'bg-secondary' }}">{{ user.role }}</span></td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SET OPERATIONS (EXCEPT) -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-danger text-white">Books Never Issued (EXCEPT)</div>
+                    <div class="card-body">
+                        <ul>
+                            {% for book in never_issued %}
+                            <li>{{ book.title }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. AGGREGATION (GROUP BY + HAVING) -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100 border-success">
+                    <div class="card-header bg-success text-white">Active Authors (GROUP BY + HAVING)</div>
+                    <div class="card-body">
+                        <p class="small text-muted">Filter: Authors with 2+ books</p>
+                        <table class="table table-sm">
+                            <thead><tr><th>Author</th><th>Total Books</th></tr></thead>
+                            <tbody>
+                                {% for author in top_authors %}
+                                <tr><td>{{ author.author_name }}</td><td>{{ author.book_count }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3b. CATEGORY ANALYTICS -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100 border-success">
+                    <div class="card-header bg-success text-white">Category Analytics (GROUP BY + HAVING)</div>
+                    <div class="card-body">
+                        <p class="small text-muted">Concept: GROUP BY category_name HAVING count > 0</p>
+                        <table class="table table-sm">
+                            <thead><tr><th>Category</th><th>Books</th><th>Total Value</th></tr></thead>
+                            <tbody>
+                                {% for cat in category_stats %}
+                                <tr><td>{{ cat.category_name }}</td><td>{{ cat.total_books }}</td><td>₹{{ cat.category_value }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3c. MEMBER ACTIVITY -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100 border-success">
+                    <div class="card-header bg-success text-white">Frequent Readers (GROUP BY + HAVING)</div>
+                    <div class="card-body">
+                        <p class="small text-muted">Concept: Filter members with 1+ issues</p>
+                        <table class="table table-sm">
+                            <thead><tr><th>Member Name</th><th>Books Issued</th></tr></thead>
+                            <tbody>
+                                {% for m in active_members %}
+                                <tr><td>{{ m.name }}</td><td>{{ m.issue_count }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. NESTED SUBQUERY -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-warning text-dark">Award Winning Author Books (Nested Subquery)</div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead><tr><th>Title</th><th>Author</th></tr></thead>
+                            <tbody>
+                                {% for book in award_books %}
+                                <tr><td>{{ book.title }}</td><td>{{ book.author_name }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. CORRELATED SUBQUERY -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-info text-white">Premium Books (>Avg in Category)</div>
+                    <div class="card-body">
+                        <p class="small text-muted">Correlated Subquery: Price > Category Average</p>
+                        <table class="table table-sm">
+                            <thead><tr><th>Title</th><th>Price</th><th>Category</th></tr></thead>
+                            <tbody>
+                                {% for book in premium_books %}
+                                <tr><td>{{ book.title }}</td><td>${{ book.price }}</td><td>{{ book.category_name }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. PL/SQL PROCEDURE RESULT -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-dark text-white">Inventory Summary (Stored Procedure)</div>
+                    <div class="card-body">
+                        <p class="small text-muted">Generated via PL/SQL Cursor Logic</p>
+                        <table class="table table-sm">
+                            <thead><tr><th>Author</th><th>Books in Stock</th></tr></thead>
+                            <tbody>
+                                {% for row in author_report %}
+                                <tr><td>{{ row.author_name }}</td><td>{{ row.book_count }}</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
