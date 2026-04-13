@@ -8,6 +8,7 @@ A Flask-based Library Management System with MySQL backend.
 - Member management.
 - Borrowing and returning books.
 - Statistical dashboard.
+- **Secure configuration** using environment variables.
 
 ## Installation
 
@@ -25,7 +26,9 @@ A Flask-based Library Management System with MySQL backend.
    ```
 5. Set up the database:
    - Import the `mysql/sql.sql` file into your MySQL server.
-   - Update the database credentials in `app.py`.
+6. Configure environment variables:
+   - Copy `.env.example` to a new file named `.env`.
+   - Update the values in `.env` with your database credentials and a secret key.
 
 ## Running the App
 ```bash

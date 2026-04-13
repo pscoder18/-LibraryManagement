@@ -2,14 +2,10 @@ import mysql.connector
 import os
 import urllib.request
 import random
+from database_config import get_db_config
 
 # Database Configuration
-DB_CONFIG = {
-    'host': "localhost",
-    'user': "root",
-    'password': "Madan1533@",
-    'database': "LibrarySystem"
-}
+DB_CONFIG = get_db_config()
 
 UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)

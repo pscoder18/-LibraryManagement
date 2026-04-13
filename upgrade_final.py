@@ -1,148 +1,87 @@
 import mysql.connector
+from database_config import get_db_config
 
-def upgrade_mysql_advanced():
-    config = {
-        'host': "localhost",
-        'user': "root",
-        'password': "Madan1533@",
-        'database': "LibrarySystem"
-    }
+# Using centrally managed config
+DB_CONFIG = get_db_config()
+
+def upgrade_final():
     try:
-        conn = mysql.connector.connect(**config)
+        conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
 
-        print("--- 1. UPGRADING PROCEDURES (ACID & LOCKING) ---")
-        
-        # Advanced IssueBook with ACID logic
+        print("Finalizing Database Schema...")
+
+        # 1. Create View for Full Inventory
+        cursor.execute("""
+            CREATE OR REPLACE VIEW FullInventory AS
+            SELECT b.book_id, b.title, a.author_name, c.category_name, b.place, b.status, b.image, b.price, b.copies
+            FROM Books b
+            JOIN Authors a ON b.author_id = a.author_id
+            LEFT JOIN Categories c ON b.category_id = c.category_id
+        """)
+        print("✅ Created View: FullInventory")
+
+        # 2. Create View for Detailed Transactions
+        cursor.execute("""
+            CREATE OR REPLACE VIEW DetailedTransactions AS
+            SELECT t.trans_id, b.title, m.name as member_name, t.issue_date, t.return_date
+            FROM Transactions t
+            JOIN Books b ON t.book_id = b.book_id
+            JOIN Members m ON t.member_id = m.member_id
+        """)
+        print("✅ Created View: DetailedTransactions")
+
+        # 3. Create Procedure to Issue Book
         cursor.execute("DROP PROCEDURE IF EXISTS IssueBook")
         cursor.execute("""
             CREATE PROCEDURE IssueBook(IN p_book_id INT, IN p_member_id INT)
             BEGIN
-                DECLARE v_copies INT DEFAULT 0;
-                DECLARE v_status VARCHAR(20);
-                DECLARE v_mem_stat VARCHAR(20);
-                
-                -- Error Handler for ATOMICITY
-                DECLARE EXIT HANDLER FOR SQLEXCEPTION
-                BEGIN
-                    ROLLBACK;
-                    RESIGNAL;
-                END;
-
-                SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-                START TRANSACTION;
-
-                -- Lock member row for CONCURRENCY CONTROL
-                SELECT status INTO v_mem_stat FROM members WHERE member_id = p_member_id FOR UPDATE;
-                IF v_mem_stat != 'Active' THEN
-                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ERROR: Member is Blocked.';
+                DECLARE v_copies INT;
+                SELECT copies INTO v_copies FROM Books WHERE book_id = p_book_id;
+                IF v_copies > 0 THEN
+                    INSERT INTO Transactions (book_id, member_id, issue_date) VALUES (p_book_id, p_member_id, CURDATE());
+                    UPDATE Books SET copies = copies - 1, status = CASE WHEN copies - 1 = 0 THEN 'Issued' ELSE 'Available' END WHERE book_id = p_book_id;
+                ELSE
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No copies available for issue.';
                 END IF;
-
-                -- Lock book row and check CONSISTENCY
-                SELECT copies, status INTO v_copies, v_status FROM books WHERE book_id = p_book_id FOR UPDATE;
-                IF v_copies <= 0 THEN
-                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ERROR: No copies available.';
-                END IF;
-
-                -- Perform the operations
-                INSERT INTO transactions (book_id, member_id, issue_date) VALUES (p_book_id, p_member_id, CURDATE());
-                UPDATE books SET copies = copies - 1 WHERE book_id = p_book_id;
-                
-                COMMIT; -- DURABILITY
             END
         """)
+        print("✅ Created Procedure: IssueBook")
 
-        # Advanced ReturnBook
+        # 4. Create Procedure to Return Book
         cursor.execute("DROP PROCEDURE IF EXISTS ReturnBook")
         cursor.execute("""
             CREATE PROCEDURE ReturnBook(IN p_book_id INT, IN p_member_id INT)
             BEGIN
-                DECLARE v_trans_id INT DEFAULT NULL;
-                DECLARE EXIT HANDLER FOR SQLEXCEPTION
-                BEGIN
-                    ROLLBACK;
-                    RESIGNAL;
-                END;
-
-                START TRANSACTION;
-                
-                -- Find active issue
-                SELECT trans_id INTO v_trans_id FROM transactions 
-                WHERE book_id = p_book_id AND member_id = p_member_id AND return_date IS NULL FOR UPDATE;
-                
-                IF v_trans_id IS NULL THEN
-                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ERROR: No active issue found.';
-                END IF;
-
-                UPDATE transactions SET return_date = CURDATE() WHERE trans_id = v_trans_id;
-                UPDATE books SET copies = copies + 1 WHERE book_id = p_book_id;
-                
-                COMMIT;
+                UPDATE Transactions SET return_date = CURDATE() WHERE book_id = p_book_id AND member_id = p_member_id AND return_date IS NULL;
+                UPDATE Books SET copies = copies + 1, status = 'Available' WHERE book_id = p_book_id;
             END
         """)
+        print("✅ Created Procedure: ReturnBook")
 
-        print("--- 2. ADDING TRIGGERS ---")
-        
-        # Trigger for automatic status update
-        cursor.execute("DROP TRIGGER IF EXISTS BeforeBookUpdate")
+        # 5. Create AwardWinners table if not exists
         cursor.execute("""
-            CREATE TRIGGER BeforeBookUpdate
-            BEFORE UPDATE ON books
-            FOR EACH ROW BEGIN
-                IF NEW.copies = 0 THEN
-                    SET NEW.status = 'Out of Stock';
-                ELSEIF NEW.copies > 0 AND OLD.copies = 0 THEN
-                    SET NEW.status = 'Available';
-                END IF;
-            END
+            CREATE TABLE IF NOT EXISTS AwardWinners (
+                AwardID INT AUTO_INCREMENT PRIMARY KEY,
+                AuthorName VARCHAR(100) NOT NULL UNIQUE
+            )
         """)
+        print("✅ Table AwardWinners Created")
 
-        # Trigger for Admin security
-        cursor.execute("DROP TRIGGER IF EXISTS PreventAdminDeletion")
-        cursor.execute("""
-            CREATE TRIGGER PreventAdminDeletion
-            BEFORE DELETE ON admins
-            FOR EACH ROW BEGIN
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Security Violation: Admin accounts cannot be deleted.';
-            END
-        """)
-
-        print("--- 3. ADDING CURSOR PROCEDURE ---")
-        
-        # Cursor for heavy borrowers
-        cursor.execute("DROP PROCEDURE IF EXISTS ReportHeavyBorrowers")
-        cursor.execute("""
-            CREATE PROCEDURE ReportHeavyBorrowers()
-            BEGIN
-                DECLARE done INT DEFAULT FALSE;
-                DECLARE v_name VARCHAR(100);
-                DECLARE v_count INT;
-                DECLARE cur_borrowers CURSOR FOR 
-                    SELECT m.name, COUNT(t.trans_id) 
-                    FROM members m 
-                    JOIN transactions t ON m.member_id = t.member_id 
-                    GROUP BY m.member_id HAVING COUNT(t.trans_id) > 3;
-                DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-                
-                OPEN cur_borrowers;
-                read_loop: LOOP
-                    FETCH cur_borrowers INTO v_name, v_count;
-                    IF done THEN LEAVE read_loop; END IF;
-                    SELECT CONCAT(v_name, ' is a heavy borrower with ', v_count, ' books.') AS Report;
-                END LOOP;
-                CLOSE cur_borrowers;
-            END
-        """)
+        # 6. Insert some winners
+        winners = ['George Orwell', 'J.R.R. Tolkien', 'F. Scott Fitzgerald', 'Harper Lee']
+        for winner in winners:
+            cursor.execute("INSERT IGNORE INTO AwardWinners (AuthorName) VALUES (%s)", (winner,))
 
         conn.commit()
-        print("✅ DATABASE SUCCESSFULLY UPGRADED TO MATCH YOUR REPORT!")
+        print("\n--- Final upgrade successful! ---")
 
     except mysql.connector.Error as err:
-        print(f"❌ Error: {err}")
+        print(f"Error: {err}")
     finally:
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
             conn.close()
 
 if __name__ == "__main__":
-    upgrade_mysql_advanced()
+    upgrade_final()

@@ -1,11 +1,7 @@
+from database_config import get_db_config
 import mysql.connector
 
-config = {
-    'host': "localhost",
-    'user': "root",
-    'password': "Madan1533@",
-    'database': "LibrarySystem"
-}
+config = get_db_config()
 
 def export_database():
     try:

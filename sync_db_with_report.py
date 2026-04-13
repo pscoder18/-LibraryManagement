@@ -1,47 +1,41 @@
 import mysql.connector
+from database_config import get_db_config
 
-def update_db_for_report():
-    config = {
-        'host': "localhost",
-        'user': "root",
-        'password': "Madan1533@",
-        'database': "LibrarySystem"
-    }
+# Using centrally managed config
+DB_CONFIG = get_db_config()
+
+def sync_data():
     try:
-        conn = mysql.connector.connect(**config)
-        cursor = conn.cursor()
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor(dictionary=True)
 
-        # Add 'branch' column to Members if it doesn't exist
-        print("Checking if 'branch' column exists in Members...")
-        cursor.execute("SHOW COLUMNS FROM Members LIKE 'branch'")
-        if not cursor.fetchone():
-            print("Adding 'branch' column...")
-            cursor.execute("ALTER TABLE Members ADD COLUMN branch VARCHAR(50) DEFAULT 'CSE'")
+        print("🔄 Syncing Database with Current Reports...")
+
+        # 1. Update Book Status based on Transactions
+        cursor.execute("""
+            UPDATE Books 
+            SET status = 'Issued' 
+            WHERE book_id IN (SELECT book_id FROM Transactions WHERE return_date IS NULL)
+        """)
         
-        # Insert/Update Alice Smith for the report queries
-        print("Adding sample data for 'Alice Smith'...")
         cursor.execute("""
-            INSERT INTO Members (name, email, password, branch) 
-            VALUES ('Alice Smith', 'alice@student.srm.edu', '1234', 'CSE')
-            ON DUPLICATE KEY UPDATE branch='CSE'
+            UPDATE Books 
+            SET status = 'Available' 
+            WHERE book_id NOT IN (SELECT book_id FROM Transactions WHERE return_date IS NULL)
         """)
 
-        # Add a placeholder for ECE branch to make join queries in report meaningful
-        cursor.execute("""
-            INSERT INTO Members (name, email, password, branch) 
-            VALUES ('Bob ECE', 'bob@ece.srm.edu', '1234', 'ECE')
-            ON DUPLICATE KEY UPDATE branch='ECE'
-        """)
+        # 2. Cleanup orphaned transactions (optional)
+        # cursor.execute("DELETE FROM Transactions WHERE book_id NOT IN (SELECT book_id FROM Books)")
 
         conn.commit()
-        print("✅ Database schema and data are now in sync with your report!")
+        print("✅ Database sync complete!")
 
     except mysql.connector.Error as err:
-        print(f"❌ Database error: {err}")
+        print(f"❌ Error: {err}")
     finally:
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
             conn.close()
 
 if __name__ == "__main__":
-    update_db_for_report()
+    sync_data()
