@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Library Management System
 
 A Flask-based Library Management System with MySQL backend.
@@ -34,3 +35,6 @@ A Flask-based Library Management System with MySQL backend.
 ```bash
 python app.py
 ```
+=======
+# -LibraryManagement
+>>>>>>> 2abe3072c8b270830c9946f0e83e50e42814e285
